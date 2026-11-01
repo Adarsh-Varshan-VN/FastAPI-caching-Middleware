@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: proxy_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: proxy_bench
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pg_bench_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d proxy_bench"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: proxy_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  middleware:
+    build: ./middleware
+    container_name: proxy_middleware
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/proxy_bench
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: vit-cse-hmac-sha256-secret-key-2026
+      CACHE_TTL: "60"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: proxy_frontend
+    ports:
+      - "8501:8501"
+    environment:
+      MIDDLEWARE_URL: http://middleware:8000
+    depends_on:
+      - middleware
+
+  locust:
+    build: ./locust
+    container_name: proxy_locust
+    ports:
+      - "8089:8089"
+    depends_on:
+      - middleware
+
+volumes:
+  pg_bench_data:
