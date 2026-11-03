@@ -69,3 +69,18 @@ The project uses a flat, read-heavy catalog structure to simulate enterprise inv
 **Known Limitations:**
 1.  **Single-Worker Constraint:** The single-flight locking mechanism relies on Python's `asyncio.Lock`, which operates on a single event loop. The ASGI server must run with a single worker process (`--workers 1`). It cannot natively scale across multiple pods without implementing a distributed lock like Redis Redlock.
 2.  **Write-Read Race Conditions:** The architecture uses the Cache-Aside pattern. If a `PUT` request updates a record, it issues a cache deletion immediately after the DB commit. However, a concurrent `GET` request happening in the exact same microsecond could read stale data or repopulate the cache with old data, meaning the system guarantees eventual consistency rather than strict consistency.
+
+### Locust Load Test Initialization Parameters
+
+![Locust Load Test Setup](Project_Screenshots/1.png)
+
+This interface captures the parameter configuration screen of the Locust load-testing engine (`http://localhost:8089`) before initiating benchmark execution against the caching proxy:
+
+* **Number of Users (Peak Concurrency): `10`**  
+  Defines the maximum ceiling of concurrent virtual user instances that will simulate active HTTP clients.
+* **Ramp Up (Users Started/Second): `5`**  
+  Controls the injection rate. Locust spawns 5 new concurrent worker coroutines every second until reaching the 10-user peak target within 2 seconds, avoiding abrupt TCP buffer saturation on the host.
+* **Target Host: `http://middleware:8000`**  
+  Directs traffic across Docker's internal bridge network to the FastAPI ASGI middleware container using container-level DNS resolution.
+* **Cluster Status: `READY` / `0 RPS` / `0% Failures`**  
+  Indicates the load engine has successfully mounted the test harness script, established network access to the target host, and is primed to begin firing weighted benchmark traffic.
